@@ -1,13 +1,4 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <cblas.h>
-
-typedef unsigned char u8;
-typedef unsigned int u32;
-typedef int i32;
-typedef float f32;
-typedef long long i64;
-typedef unsigned long long u64;
+#include "helper.h"
 
 u8 *read_file(char *filename, i64 *size, i64 start)
 {
