@@ -1,4 +1,4 @@
-#include "helper.h"
+#include "..\helper.h"
 
 void blas_mult(float *A, float *B, float *C, int M, int K, int N)
 {
@@ -19,7 +19,7 @@ void loop_mult(float *A, float *B, float *C, int M, int K, int N)
 {
 	int i = 0, j = 0;
 
-	#pragma omp parallel for
+	#pragma omp parallel for private(j)
     for (i = 0; i < M; i++)
         for (j = 0; j < N; j++)
 			C[i * N + j] = ft_sum(&A[i * K], B, K, N, j);
@@ -68,6 +68,7 @@ void avx2_mult(const float *A, const float *B, float *C, int M, int K, int N)
         }
 }
 
+
 int main() 
 {
 	// A (m x k) * B (k x n) = C (m x n)
@@ -93,24 +94,21 @@ int main()
 		C3[i] = 0;
 	}
 
-	int i = 0, j = 10;
-	int x, y, z;
-	clock_t start = clock();
-	for (i = 0; i < j; i++)
-		loop_mult(A, B, C1, m, k, n);
-	x = clock() - start;
+	u64 start, x, y, z;
 
-	start = clock();
-	for (i = 0; i < j; i++)
-		blas_mult(A, B, C2, m, k, n);
-	y = clock () - start;
+	start = ns();
+	loop_mult(A, B, C1, m, k, n);
+	x = ns() - start;
 
-	start = clock();
-	for (i = 0; i < j; i++)
-		avx2_mult(A, B, C3, m, k, n);
-	z = clock () - start;
+	start = ns();
+	blas_mult(A, B, C2, m, k, n);
+	y = ns() - start;
 
-	printf("%d, %d, %d", x, y, z);
+	start = ns();
+	avx2_mult(A, B, C3, m, k, n);
+	z = ns() - start;
+
+	printf("%f, %f, %f", printms(x), printms(y), printms(z));
 	printf("\n(%d, %d, %d)", check_matrix(C1, C2, m*n), check_matrix(C2, C3, m*n), check_matrix(C1, C3, m*n));
     return 0;
 }
