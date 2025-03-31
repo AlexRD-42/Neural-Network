@@ -1,94 +1,89 @@
 #include "..\helper.h"
 
-static uint64_t res, seed, s32[2], s64[4], s64m[4];
+static f32 res;
+static u64 state[4];
 
-static inline uint64_t splitmix64(void)
+u64 splitmix64()
 {
-	uint64_t result = (seed += 0x9E3779B97f4A7C15);
+	u64 result = (state[0] += 0x9E3779B97f4A7C15);
 	result = (result ^ (result >> 30)) * 0xBF58476D1CE4E5B9;
 	result = (result ^ (result >> 27)) * 0x94D049BB133111EB;
 	return result ^ (result >> 31);
 }
 
-static inline uint64_t xoshiro128(void)
+u64 xoshiro128()
 {
-	const uint64_t s0 = s32[0];
-	uint64_t s1 = s32[1];
-	const uint64_t result = s0 + s1;
+	const u64 s0 = state[0];
+	u64 s1 = state[1];
+	const u64 result = s0 + s1;
 
 	s1 ^= s0;
-	s32[0] = ((s0 << 24) | (s0 >> 40)) ^ s1 ^ (s1 << 16);
-	s32[1] = (s1 << 37) | (s1 >> 27);
+	state[0] = ((s0 << 24) | (s0 >> 40)) ^ s1 ^ (s1 << 16);
+	state[1] = (s1 << 37) | (s1 >> 27);
 	
 	return result;
 }
 
-static inline uint64_t xoshiro256(void)
+u64 xoshiro256()
 {
-	const uint64_t result = s64[0] + s64[3];
-	const uint64_t t = s64[1] << 17;
+	const u64 result = state[0] + state[3];
+	const u64 t = state[1] << 17;
 
-	s64[2] ^= s64[0];
-	s64[3] ^= s64[1];
-	s64[1] ^= s64[2];
-	s64[0] ^= s64[3];
+	state[2] ^= state[0];
+	state[3] ^= state[1];
+	state[1] ^= state[2];
+	state[0] ^= state[3];
 
-	s64[2] ^= t;
+	state[2] ^= t;
 
-	s64[3] = (s64[3] << 45) | (s64[3] >> 19);
+	state[3] = (state[3] << 45) | (state[3] >> 19);
 
 	return result;
 }
 
-static inline uint64_t mwc256(void)
+u64 mwc256()
 {
-	const uint64_t result = s64m[2];
-	const __uint128_t t = 0xfff62cf2ccc0cdaf * (__uint128_t)s64m[0] + s64m[3];
-	s64m[0] = s64m[1];
-	s64m[1] = s64m[2];
-	s64m[2] = t;
-	s64m[3] = t >> 64;
+	const u64 result = state[2];
+	const __uint128_t t = 0xfff62cf2ccc0cdaf * (__uint128_t)state[0] + state[3];
+	state[0] = state[1];
+	state[1] = state[2];
+	state[2] = t;
+	state[3] = t >> 64;
 	return result;
 }
 
-void init_seed(u64 seed)
+static inline f32 fast_itof(u64 value)
 {
-	u64 i;
-
-	for (i = 0; i < 128; i++)
-		splitmix64();
-
-	for (i = 0; i < 4; i ++)
-	{
-		splitmix64();
-		if (i < 2) s32[i] = seed;
-		s64[i] = seed;
-		s64m[i] = seed;
-	}
+	f32 result;
+	uint32_t bits = (uint32_t)(value >> 32);
+	bits &= 0b10000000011111111111111111111111; // 0x807FFFFF
+	bits |= 0b00111111000000000000000000000000; // 0x3F000000
+	memcpy(&result, &bits, 4);
+	return result;
 }
 
 u64 benchmark_rng(u32 func, u64 num_iter)
 {
-	res = 0;
+	res = 0.0f;
 	u64 start = ns();
 
 	switch (func)
 	{
 		case 1:
 			for (u64 i = 0; i < num_iter; i++)
-				res += splitmix64();
+				res += fast_itof(splitmix64());
 			break;
 		case 2:
 			for (u64 i = 0; i < num_iter; i++)
-				res += xoshiro128();
+				res += fast_itof(xoshiro128());
 			break;
 		case 3:
 			for (u64 i = 0; i < num_iter; i++)
-				res += xoshiro256();
+				res += fast_itof(xoshiro256());
 			break;
 		case 4:
 			for (u64 i = 0; i < num_iter; i++)
-				res += mwc256();
+				res += fast_itof(mwc256());
 			break;
 		default:
 			break;
@@ -104,13 +99,21 @@ f64 get_avg(u64 *ptr, u64 n)
 	return (((f64)(sum)) / (n - n/10));
 }
 
+void init_seed(u64 initial_seed)
+{
+	state[0] = splitmix64(initial_seed);
+	state[1] = splitmix64(state[0]);
+	state[2] = splitmix64(state[1]);
+	state[3] = splitmix64(state[2]);
+}
+
 int main()
 {
 	u64 num_runs = 1e3;
 	u64 num_iter = 1e3;
 	u64 (*results)[num_runs] = malloc(num_runs * 4 * sizeof(u64));
-
 	init_seed(ns());
+
 	for (u64 run = 0; run < num_runs; run++) 
 	{
 		results[0][run] = benchmark_rng(1, num_iter);
@@ -123,5 +126,5 @@ int main()
     printf("xoshiro128: %f ns\n", printns(get_avg(results[1], num_runs)));
     printf("xoshiro256: %f ns\n", printns(get_avg(results[2], num_runs)));
 	printf("mwc256: %f ns\n", printns(get_avg(results[3], num_runs)));
-	printf("\n%lld", res);
+	printf("\n%f", res);
 }

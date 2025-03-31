@@ -26,3 +26,5 @@ I see several solutions:
 	Each thread would automatically return an AVX vector of floats
 
 # Change the RNG function to return 32 bit float
+Only 24 bits are used per float (assuming N = -1~1)
+One could safely extract two floats per function call, without having problems with linearity of 4 last bits

@@ -1,6 +1,6 @@
 #include "..\helper.h"
 
-static u64 res;
+static f32 res;
 
 u64 splitmix64(u64 seed)
 {
@@ -51,27 +51,38 @@ u64 mwc256(u64 *state)
 	return result;
 }
 
+static inline f32 fast_itof(u64 value)
+{
+	f32 result;
+	uint32_t bits = (uint32_t)(value >> 32);
+	bits &= 0b10000000011111111111111111111111; // 0x807FFFFF
+	bits |= 0b00111111000000000000000000000000; // 0x3F000000
+	memcpy(&result, &bits, 4);
+	return result;
+}
+
 u64 benchmark_rng(u32 func, u64 num_iter, u64 *seed)
 {
+	res = 0.0f;
 	u64 start = ns();
 
 	switch (func)
 	{
 		case 1:
 			for (u64 i = 0; i < num_iter; i++)
-				res = splitmix64(seed[0]);
+				res += fast_itof(splitmix64(seed[0]));
 			break;
 		case 2:
 			for (u64 i = 0; i < num_iter; i++)
-				res = xoshiro128(seed);
+				res += fast_itof(xoshiro128(seed));
 			break;
 		case 3:
 			for (u64 i = 0; i < num_iter; i++)
-				res += xoshiro256(seed);
+				res += fast_itof(xoshiro256(seed));
 			break;
 		case 4:
 			for (u64 i = 0; i < num_iter; i++)
-				res += mwc256(seed);
+				res += fast_itof(mwc256(seed));
 			break;
 		default:
 			break;
@@ -99,8 +110,8 @@ u64 *init_seed(u64 initial_seed)
 
 int main()
 {
-	u64 num_runs = 1e2;
-	u64 num_iter = 1e6;
+	u64 num_runs = 1e3;
+	u64 num_iter = 1e3;
 	u64 (*results)[num_runs] = malloc(num_runs * 4 * sizeof(u64));
 	u64 *seed = init_seed(ns());
 
@@ -112,9 +123,9 @@ int main()
 		results[3][run] = benchmark_rng(4, num_iter, seed);
     }
 
-    printf("splitmix64: %f us\n", printus(get_avg(results[0], num_runs)));
-    printf("xoshiro128: %f us\n", printus(get_avg(results[1], num_runs)));
-    printf("xoshiro256: %f us\n", printus(get_avg(results[2], num_runs)));
-	printf("mwc256: %f us\n", printus(get_avg(results[3], num_runs)));
-	printf("\n%lld", res);
+    printf("splitmix64: %f ns\n", printns(get_avg(results[0], num_runs)));
+    printf("xoshiro128: %f ns\n", printns(get_avg(results[1], num_runs)));
+    printf("xoshiro256: %f ns\n", printns(get_avg(results[2], num_runs)));
+	printf("mwc256: %f ns\n", printns(get_avg(results[3], num_runs)));
+	printf("\n%f", res);
 }

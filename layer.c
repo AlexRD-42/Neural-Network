@@ -1,83 +1,60 @@
-#include "helper.h"
+#include "layer_init.h"
 
-// f32 (*weight_ptr)[M] = (f32 (*)[M]) weight;
-typedef struct s_std_layer
+static inline void sigmoid(f32 *array, u32 size)
 {
-	//          Weights        Input           Output     +    Biases 
-	//          (M x K)   *   (K x N)     =   (M x N)     +   (M x 1)
-	// MNIST: (100 x 784) * (784 x 60000) = (100 x 60000) + (100 x 1)
-	f32 *weight, *bias, *output;
-	u32 M, K;
-
-} std_layer;
-
-std_layer init_std_layer(u32 K, u32 M, f32 *parameters)
-{
-	f32 *weight = &parameters[M];
-	f32 *bias = parameters;
-	u32 i = 0, j = 0;
-
-	for (i = 0; i < M ; i++)
+	for (u32 i = 0; i < size; i++)
 	{
-		bias[i] = 0;
-		for (j = 0; j < K; j++)
-			weight[i * K + j] = 1; // ft_rand() * 2 - 1;
+		array[i] = 1 / (1 + expf(-array[i]));
 	}
-
-	return (std_layer) {.weight = weight, .bias = bias, .M = M, .K = K};
 }
 
-std_layer *initialize_layer(u32 numLayers, u32 *layerStructure)
+// C = αAB + βC
+// C (M x N) = A (M x K) * B (K x N)
+void layer_pass(f32 *input, std_layer layer)
 {
-	u32 i = 0;
-	u32 K = 0, M = 0;
-	u64 totalMemory = 0, offset = 0;
+	for (u32 i = 0; i < layer.M; i++)
+		memcpy(layer.output + i * layer.N, layer.bias, layer.N * sizeof(f32));
 
-	for (i = 0; i < numLayers; i++)
-	{
-		K = layerStructure[i];
-		M = layerStructure[i + 1];
-		totalMemory += M * (K + 1) * sizeof(f32);
-	}
-
-	std_layer *network = (std_layer *) malloc(numLayers * sizeof(std_layer));
-	if (network == NULL)
-		return (NULL);
-	f32 *parameters = (f32 *) malloc(totalMemory);
-	if (parameters == NULL)
-	{
-		free(network); 
-		return (NULL);
-	}
-	for (i = 0; i < numLayers; i++)
-	{
-		K = layerStructure[i];
-		M = layerStructure[i + 1];
-		network[i] = init_std_layer(K, M, &parameters[offset]);
-		offset += M * (K + 1);
-	}
-	return(network);
+	cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, layer.M, layer.N, layer.K, 1.0f, input, layer.K, layer.weight, layer.N, 1.0f, layer.output, layer.N);
+	sigmoid(layer.output, layer.N * layer.M);
 }
 
-// N here is the previous layers K
-// Check to see if blas adds or replaces the array passed by reference (beta = 1)
-f32 *layer_pass(f32 *input, u32 N, std_layer layer)
+void forward_pass(f32 *input, std_layer *network, network_cfg cfg)
 {
-	layer.output = layer.bias;
-	cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-		layer.M, N, layer.K, 1.0,
-		input, layer.K, layer.weight, N, 0.0, layer.output, N);
+	layer_pass(input, network[0]);
+	for (u32 i = 1; i < cfg.numLayers; i++)
+		layer_pass(network[i - 1].output, network[i]);
+}
+
+void backward_pass(std_layer layer)
+{
+	
+}
+
+void print_layer(std_layer layer, float *ptr)
+{
+	u64 numElements = layer.N * (layer.M + layer.K + 1);
+	for (u32 i = 0; i < numElements; i++)
+	{
+		printf("%.3f,\t", ptr[i]);
+		if ((i + 1) % layer.N == 0)
+			printf("\n");
+	}
 }
 
 int main()
 {
-	u32 layerStructure[] = {16, 8, 4, 2};
-	u32 numLayers = 3;
-	std_layer *network = initialize_layer(numLayers, layerStructure);
+	u32 lstruc[4] = {16, 8, 4, 2};
+	u32 i = 0;
+	network_cfg cfg = {.M = 10, .numLayers = 3, .layer = lstruc};
+	std_layer *network = initialize_layer(cfg);
 
-	std_layer *layer1 = &network[1];  // First layer
-	std_layer *layer2 = &network[2];  // First layer
-	// f32 *layer2 = network[0].bias;  // Second layer
+	f32 *input = malloc(16 * 10 * sizeof(f32));
+	for (i = 0; i < 160; i++)
+		input[i] = ((float) i)/1000;
 
-	printf("Memory distance: %td bytes\n", (char*)layer2 - (char*)layer1);
+	layer_pass(input, network[0]);
+	layer_pass(network[0].output, network[1]);
+	layer_pass(network[1].output, network[2]);
+	print_layer(network[2], network[2].bias);
 }
