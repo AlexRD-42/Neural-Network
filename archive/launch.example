@@ -1,0 +1,23 @@
+{
+	"tasks": [
+	  {
+		…
+		"args": [
+		  "-fdiagnostics-color=always",
+		  "-g",                          // keep debug info if you need it
+		  "-O3",                         // highest optimization level
+		  "-march=native",               // tune + enable all SIMD on host
+		  "-funroll-loops",              // unroll small loops
+		  "-ftree-vectorize",            // enable auto‐vectorization
+		  "-ffast-math",                 // relax IEEE rules for faster FP
+		  "-fomit-frame-pointer",        // free up a register
+		  "-flto",                       // link‐time optimization
+		  "-fno-math-errno",             // faster math by dropping errno
+		  "-o",
+		  "${fileDirname}/${fileBasenameNoExtension}"
+		],
+		…
+	  }
+	],
+	"version": "2.0.0"
+  }
